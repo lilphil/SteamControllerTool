@@ -48,16 +48,18 @@ class ValveSoftwareWiredControllerBootloader(USBHidDevice):
         self.expect(response, [0x94, 0x02])
 
     def FlashFirmware(self, filename):
+        # Should check for full buffer at end of read, if not fill remaining bytes with -1
         with open(filename, 'rb') as f:
             f.seek(0x2000)
             chunks = iter(lambda: f.read(0x32), b'')
             for chunk in chunks:
-                print(".", end="")
+                print(".", end="",flush=True)
                 length = len(chunk)
                 log.debug(binascii.hexlify(chunk))
                 payload = [SCProtocolId.FlashLPCFirmware, length]
                 payload.extend(chunk)
                 self.send(payload)
+            print("")
         time.sleep(0.2)
 
 

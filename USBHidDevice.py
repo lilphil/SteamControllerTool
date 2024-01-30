@@ -26,23 +26,31 @@ class USBHidDevice:
             except:
                 log.warn("Failed to close interface")
 
-    def send(self, data, wIndex = 2):
+    def send(self, data):
         request_data = [0x00] * 65 # First byte is Report ID
         request_data[1:len(data) + 1] = data
         request_packet = bytes(request_data)
         log.debug("Request:  %s" % request_packet[1:].hex())
         self.interface.send_feature_report(request_packet)
 
-    def get(self, wIndex = 2):
+    def get(self):
         response_packet = self.interface.get_feature_report(0x00, 65)
         response = response_packet[1:]
         log.debug("Response: %s" % response.hex())
         return response
 
-    def expect(self, bytes, expected):
-        for index, item in enumerate(expected):
-            if bytes[index] != item:
-                raise Exception("Unexpected response")
+    def expect(self, bytes, *args):
+        """
+        Takes a variable argument list of arrays of bytes
+        """
+        for argindex, expected in enumerate(args):
+            match = True
+            for index, item in enumerate(expected):
+                if bytes[index] != item:
+                    match = False
+            if match:
+                return argindex
+        raise Exception("Unexpected response")
 
     def ResetSOC(self, data = None):
         payload = [SCProtocolId.ResetSOC]

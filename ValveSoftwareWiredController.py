@@ -1,4 +1,6 @@
 import struct
+import time
+import binascii
 from datetime import datetime
 
 from constants import SCProtocolId
@@ -98,5 +100,39 @@ class ValveSoftwareWiredController(USBHidDevice):
         self.send([SCProtocolId.SetSettingsDefaultValues])
         self.send([SCProtocolId.SetSettings, 0x03, 0x18, 0x01])
 
-    def EraseRadio(self):
+# These methods only work on BLE host firmware
+
+    def FlashRadioFirmware(self, filename):
+        self.SWDStart()
+        self.SWDErase()
+        self.SWDFlash(filename)
+
+    def SWDStart(self):
         self.send([SCProtocolId.SendIRCode,0x04, 0x17, 0xed, 0xfe, 0xd0])
+        while (self.expect(self.get(), [0x94, 0x06, 0x00, 0x00, 0xfc, 0x03], [0x94, 0x06, 0x00, 0x00, 0x00, 0x00, 0x02])):
+            time.sleep(0.1)
+
+    def SWDErase(self):
+        self.send([SCProtocolId.SWDErase])
+        while (self.expect(self.get(), [0x94, 0x06, 0x00, 0x00, 0x01, 0x00], [0x94, 0x06, 0x00, 0x00, 0x00, 0x00, 0x02])):
+            time.sleep(0.1)
+
+    def SWDFlash(self,filename):
+        with open(filename, 'rb') as f:
+            f.seek(0)
+            chunk_size = 0x38
+            chunks = iter(lambda: f.read(chunk_size), b'')
+            for idx, chunk in enumerate(chunks):
+                print(".", end="",flush=True)
+                length = len(chunk)
+                address = struct.unpack("BBBB",(idx * length).to_bytes(4, 'little'))
+                # 4 bytes of address location 38*n
+                payload = [SCProtocolId.FlashSWD, length+4]
+                payload.extend(address)
+                payload.extend(chunk)
+                self.send(payload)
+                # Wait for the first response, but the second one is a valid response
+                while (self.expect(self.get(), [0x94, 0x06, 0x00, 0x00, 0x60, 0x09], [0x94, 0x06, 0x00, 0x00, 0x00, 0x00, 0x02])):
+                    time.sleep(0.02)
+            print("")
+

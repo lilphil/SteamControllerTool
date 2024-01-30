@@ -33,4 +33,5 @@ class SCProtocolId(IntEnum):
     CalibrateJoystick = 0xbf
     SetPersonalise = 0xc1
     SendIRCode = 0xc6
-    StopIR = 0xc7
+    FlashSWD = 0xc7
+    SWDErase = 0xca
