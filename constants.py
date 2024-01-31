@@ -31,6 +31,7 @@ class SCProtocolId(IntEnum):
     GetChipID = 0xba
     ReadUID = 0xbb
     CalibrateJoystick = 0xbf
+    #ValveMode = 0xc0
     SetPersonalise = 0xc1
     SendIRCode = 0xc6
     FlashSWD = 0xc7

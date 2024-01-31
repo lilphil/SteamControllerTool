@@ -39,22 +39,24 @@ class ValveSoftwareWiredController(USBHidDevice):
         log.info('Bootloader Revision: 0x%08X %s' % (self.bootloaderRev, datetime.fromtimestamp(self.bootloaderRev)))
         log.info('Firmware Revision: 0x%08X %s' % (self.firmwareRev, datetime.fromtimestamp(self.firmwareRev)))
 
-    # This doesnt work
-    # def Pulse(self, side):
-    #     """
-    #     Triggers a Haptic vibration.
-
-    #     Offset | Type | Name
-    #     -------|------|-------
-    #     0      | u8   | Haptic side (0 = right, 1 = left)
-    #     1      | u16  | ??
-    #     3      | u16  | ??
-    #     5      | u16  | ??
-    #     7      | u8   | Optional - defaults to zero if not present.
-    #     """
-    #     if side > 0x01:
-    #         side = 0x01
-    #     self.send([SCProtocolId.TriggerHapticPulse, side])
+    def Pulse(self, side, high, low, repeat):
+        """
+        Triggers a Haptic vibration.
+        Offset | Type | Name
+        -------|------|-------
+        0      | u8   | Must be 0x07 ??
+        1      | u8   | Haptic side (0 = right, 1 = left)
+        2      | u16  | Pulse high duration
+        4      | u16  | Pulse low duration
+        6      | u16  | Pulse repeat count
+        8      | u8   | Optional - defaults to zero if not present.
+        """
+        if side > 0x01:
+            side = 0x01
+        highbytes = high.to_bytes(2, 'little')
+        lowbytes = low.to_bytes(2, 'little')
+        repeatbytes = repeat.to_bytes(2, 'little')
+        self.send([SCProtocolId.TriggerHapticPulse, 0x07, side, highbytes[0], highbytes[1], lowbytes[0], lowbytes[1], repeatbytes[0], repeatbytes[1]])
 
     def Jingle(self, index = None):
         """
@@ -100,6 +102,9 @@ class ValveSoftwareWiredController(USBHidDevice):
         self.send([SCProtocolId.SetSettingsDefaultValues])
         self.send([SCProtocolId.SetSettings, 0x03, 0x18, 0x01])
 
+    # def ValveMode(self):
+    #     self.send([SCProtocolId.ValveMode, 0x87, 0x03, 0x08, 0x07, 0x00])
+
 # These methods only work on BLE host firmware
 
     def FlashRadioFirmware(self, filename):
@@ -135,4 +140,3 @@ class ValveSoftwareWiredController(USBHidDevice):
                 while (self.expect(self.get(), [0x94, 0x06, 0x00, 0x00, 0x60, 0x09], [0x94, 0x06, 0x00, 0x00, 0x00, 0x00, 0x02])):
                     time.sleep(0.02)
             print("")
-
