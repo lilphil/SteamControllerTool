@@ -41,7 +41,7 @@ class ValveSoftwareWiredControllerBootloader(USBHidDevice):
             raise Exception("Failed to verify firmware checksum")
 
     def EraseFirmware(self):
-        self.send([SCProtocolId.EraseLPCFirmware], 0)
+        self.send([SCProtocolId.EraseLPCFirmware])
         time.sleep(0.1)
         response = self.get()
         protoId, protoResp = struct.unpack("<BB", response[:2])
