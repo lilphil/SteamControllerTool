@@ -33,7 +33,7 @@ class ValveSoftwareWiredControllerBootloader(USBHidDevice):
         payload = [SCProtocolId.VerifyLPCFirmware,0x10]
         payload.extend(checksum)
         self.send(payload)
-        time.sleep(0.1)
+        time.sleep(1)
         response = self.get()
         try:
             self.expect(response, [0x94, 0x02, 0x00]) # Possibly [0x94, 0x02, 0x01] is fail 
@@ -44,7 +44,6 @@ class ValveSoftwareWiredControllerBootloader(USBHidDevice):
         self.send([SCProtocolId.EraseLPCFirmware])
         time.sleep(0.1)
         response = self.get()
-        protoId, protoResp = struct.unpack("<BB", response[:2])
         self.expect(response, [0x94, 0x02])
 
     def FlashFirmware(self, filename):
@@ -53,7 +52,8 @@ class ValveSoftwareWiredControllerBootloader(USBHidDevice):
             f.seek(0x2000)
             chunks = iter(lambda: f.read(0x32), b'')
             for chunk in chunks:
-                print(".", end="",flush=True)
+                if not log.isEnabledFor(logging.DEBUG):
+                    print(".", end="",flush=True)
                 length = len(chunk)
                 log.debug(binascii.hexlify(chunk))
                 payload = [SCProtocolId.FlashLPCFirmware, length]

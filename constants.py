@@ -36,3 +36,4 @@ class SCProtocolId(IntEnum):
     SendIRCode = 0xc6
     FlashSWD = 0xc7
     SWDErase = 0xca
+    SWDSave = 0xcb

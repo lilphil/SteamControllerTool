@@ -17,6 +17,7 @@ class ValveSoftwareWiredController(USBHidDevice):
 
     firmwareRev = 0
     bootloaderRev = 0
+    radioRev = 0
     personaliseState = 0
 
     def __init__(self):
@@ -28,17 +29,21 @@ class ValveSoftwareWiredController(USBHidDevice):
         self.close()
 
     def Info(self):
-        log.info("Manufacturer: %s" % self.interface.manufacturer)
-        log.info("Product: %s" % self.interface.product)
+        hid_info = self.hid_info()
+        log.info("Manufacturer: %s" % hid_info.manufacturer)
+        log.info("Product: %s" % hid_info.product)
+
         self.send([SCProtocolId.ControllerInfoRequest])
-        response = self.get()
-        protoId, unk1, unk2, unk3, usb_pid, unk4, unk5, self.bootloaderRev, unk7, self.firmwareRev = struct.unpack("<BBIHHIIIBI", response[:27])
-        #unk1: 0x28 or 0x23
+        response = self.get([0x83,0x23,00,00,00,00,00,0x01,0x02,0x11,00,00,0x02,0x03,00,00,00,0x0a,0x6d,0x92,0xd2,0x55,0x04,0x10,0x5c,0xbf,0x57,0x05,00,00,00,00,0x09,0x09])
+
         self.expect(response, [0x83])
+        #unk1: 0x28 or 0x23
+        protoId, unk1, unk2, unk3, usb_pid, unk4, unk5, self.bootloaderRev, unk7, self.firmwareRev, sep5, self.radioRev = struct.unpack("<BBIHHIIIBIBI", response[:32])
+
         log.info('USB Pid: 0x%04X' % usb_pid)
         log.info('Bootloader Revision: 0x%08X %s' % (self.bootloaderRev, datetime.fromtimestamp(self.bootloaderRev)))
         log.info('Firmware Revision: 0x%08X %s' % (self.firmwareRev, datetime.fromtimestamp(self.firmwareRev)))
-
+        log.info('Radio Revision: 0x%08X %s' % (self.radioRev, datetime.fromtimestamp(self.radioRev)))
     def Pulse(self, side, high, low, repeat):
         """
         Triggers a Haptic vibration.
@@ -105,38 +110,50 @@ class ValveSoftwareWiredController(USBHidDevice):
     # def ValveMode(self):
     #     self.send([SCProtocolId.ValveMode, 0x87, 0x03, 0x08, 0x07, 0x00])
 
-# These methods only work on BLE host firmware
-
-    def FlashRadioFirmware(self, filename):
-        self.SWDStart()
-        self.SWDErase()
-        self.SWDFlash(filename)
+    # These methods only work on BLE host firmware
 
     def SWDStart(self):
         self.send([SCProtocolId.SendIRCode,0x04, 0x17, 0xed, 0xfe, 0xd0])
-        while (self.expect(self.get(), [0x94, 0x06, 0x00, 0x00, 0xfc, 0x03], [0x94, 0x06, 0x00, 0x00, 0x00, 0x00, 0x02])):
+        while (self.expect(self.get([0x94, 0x06, 0x00, 0x00, 0xfc, 0x03]), [0x94, 0x06, 0x00, 0x00, 0xfc, 0x03], [0x94, 0x06, 0x00, 0x00, 0x00, 0x00, 0x02])):
             time.sleep(0.1)
 
     def SWDErase(self):
         self.send([SCProtocolId.SWDErase])
-        while (self.expect(self.get(), [0x94, 0x06, 0x00, 0x00, 0x01, 0x00], [0x94, 0x06, 0x00, 0x00, 0x00, 0x00, 0x02])):
+        while (self.expect(self.get([0x94, 0x06, 0x00, 0x00, 0x01, 0x00]), [0x94, 0x06, 0x00, 0x00, 0x01, 0x00], [0x94, 0x06, 0x00, 0x00, 0x00, 0x00, 0x02])):
             time.sleep(0.1)
 
-    def SWDFlash(self,filename):
+    def SWDSave(self):
+        self.send([SCProtocolId.SWDSave])
+
+    def SWDFlash(self,filename,start_address):
         with open(filename, 'rb') as f:
             f.seek(0)
             chunk_size = 0x38
             chunks = iter(lambda: f.read(chunk_size), b'')
             for idx, chunk in enumerate(chunks):
-                print(".", end="",flush=True)
+                log.debug("File: %s | Chunk: %x", filename,idx)
+                if not log.isEnabledFor(logging.DEBUG):
+                    print(".", end="",flush=True)
                 length = len(chunk)
-                address = struct.unpack("BBBB",(idx * length).to_bytes(4, 'little'))
+                # TODO find out what the random number is. A checksum?
+                random_number = 0
+                if length < chunk_size:
+                    log.debug("Last chunk")
+                    if filename.endswith("d0g_bootloader.bin"):
+                        random_number = 0x360
+                    elif filename.endswith("d0g_module.bin"):
+                        random_number = 0xce4
+                    elif filename.endswith("s110_nrf51_8.0.0_softdevice.bin"):
+                        random_number = 0x67f0
+                    elif filename.endswith("vcf_wired_controller_d0g_5a0e3f348_radio.bin"):
+                        random_number = 0x6a44
+                address = struct.unpack("BBBB",((idx * length)+start_address+random_number).to_bytes(4, 'little'))
                 # 4 bytes of address location 38*n
                 payload = [SCProtocolId.FlashSWD, length+4]
                 payload.extend(address)
                 payload.extend(chunk)
                 self.send(payload)
-                # Wait for the first response, but the second one is a valid response
-                while (self.expect(self.get(), [0x94, 0x06, 0x00, 0x00, 0x60, 0x09], [0x94, 0x06, 0x00, 0x00, 0x00, 0x00, 0x02])):
-                    time.sleep(0.02)
+                # Wait for "ready": 0x60,0x09, while "not ready":0x00, 0x02
+                while(self.expect(self.get(), [0x94, 0x06, 0x00, 0x00, 0x60, 0x09], [0x94, 0x06, 0x00, 0x00, 0x00, 0x00, 0x02])):
+                    time.sleep(0.01)
             print("")

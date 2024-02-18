@@ -1,5 +1,6 @@
 import hid
 import logging
+import time
 
 from constants import SCProtocolId
 
@@ -11,8 +12,12 @@ class USBHidDevice:
         self.vid = vendor_id
         self.pid = product_id
         self.interface_number = interface_number
+        self.simulate = False
 
     def open(self):
+        if self.simulate:
+            log.debug("Open would have tried to open %x %x", self.vid, self.pid)
+            return
         interfaces = [i for i in hid.enumerate(self.vid, self.pid) if i['interface_number'] == self.interface_number]
         if len(interfaces) == 0:
             raise Exception("No device found")
@@ -26,16 +31,37 @@ class USBHidDevice:
             except:
                 log.warn("Failed to close interface")
 
+    def hid_info(self):
+        info = type('HidInfo', (object,), {})
+        if self.simulate:
+            info.manufacturer = "Simulated HID manufacturer"
+            info.product = "Simulated HID product"
+        else:
+            info.manufacturer = self.interface.manufacturer
+            info.product =  self.interface.product
+        return info
+        
     def send(self, data):
         request_data = [0x00] * 65 # First byte is Report ID
         request_data[1:len(data) + 1] = data
         request_packet = bytes(request_data)
         log.debug("Request:  %s" % request_packet[1:].hex())
+        if self.simulate:
+            return
         self.interface.send_feature_report(request_packet)
 
-    def get(self):
-        response_packet = self.interface.get_feature_report(0x00, 65)
-        response = response_packet[1:]
+    def get(self, simulated = 0x00):
+        if self.simulate:
+            response = bytes(simulated)
+        else:
+            # If we get a blank response, try a few more times
+            for _ in range(15):
+                response_packet = self.interface.get_feature_report(0x00, 65)
+                if len(response_packet) > 0:
+                    break
+                time.sleep(0.1)
+            
+            response = response_packet[1:]
         log.debug("Response: %s" % response.hex())
         return response
 
@@ -46,11 +72,18 @@ class USBHidDevice:
         for argindex, expected in enumerate(args):
             match = True
             for index, item in enumerate(expected):
+                if len(bytes) == 0 or len(bytes) < index:
+                    match = False
+                    break
                 if bytes[index] != item:
                     match = False
             if match:
                 return argindex
-        raise Exception("Unexpected response")
+        if self.simulate:
+            log.info("Unexpected response ignored in simulation mode")
+            return -1
+        else:
+            raise Exception("Unexpected response")
 
     def ResetSOC(self, data = None):
         payload = [SCProtocolId.ResetSOC]

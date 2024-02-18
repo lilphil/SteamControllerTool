@@ -59,6 +59,15 @@ class SteamController:
         b.VerifyFirmware(checksum)
         self.FirmwareMode()
 
+    def FlashRadioFirmware(self, soft_device, application, application_address = 0):
+        c = self.Ctrl()
+        c.SWDStart()
+        c.SWDErase()
+        c.SWDFlash(soft_device,0)
+        c.SWDFlash(application,application_address)
+        c.SWDSave()
+        c.ResetSOC() 
+
     def FirmwareMode(self):
         self.initial_bootloader_mode = False # If we call this directly, then we assume we have returned to normal
         self.bootloader.RebootToFirmware()
