@@ -48,20 +48,29 @@ class SteamController:
         return self.sc
 
     def FlashLPCFirmware(self, filename):
+        log.info("Reboot to bootloader")
         b = self.Bootloader()
+        log.info("Erase LPC firmware")
         b.EraseFirmware()
+        log.info("Flashing %s", filename)
         b.FlashFirmware(filename)
         checksum = self.ChecksumFirmwareFile(filename, 0x2030)
         b.VerifyFirmware(checksum)
+        log.info("Resetting")
         self.FirmwareMode()
 
     def FlashRadioFirmware(self, soft_device, application, application_address = 0):
         c = self.Ctrl()
+        log.info("Starting SWD")
         c.SWDStart()
+        log.info("Erase SWD")
         c.SWDErase()
+        log.info("Flashing %s", soft_device)
         c.SWDFlash(soft_device,0)
+        log.info("Flashing %s at offset %d", application, application_address)
         c.SWDFlash(application,application_address)
         c.SWDSave()
+        log.info("Resetting")
         c.ResetSOC() 
 
     def FirmwareMode(self):

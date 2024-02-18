@@ -44,6 +44,8 @@ class ValveSoftwareWiredController(USBHidDevice):
         log.info('Bootloader Revision: 0x%08X %s' % (self.bootloaderRev, datetime.fromtimestamp(self.bootloaderRev)))
         log.info('Firmware Revision: 0x%08X %s' % (self.firmwareRev, datetime.fromtimestamp(self.firmwareRev)))
         log.info('Radio Revision: 0x%08X %s' % (self.radioRev, datetime.fromtimestamp(self.radioRev)))
+
+    #eg ctrl.Pulse(0,65535,65535,2)
     def Pulse(self, side, high, low, repeat):
         """
         Triggers a Haptic vibration.
