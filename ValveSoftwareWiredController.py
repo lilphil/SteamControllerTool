@@ -135,25 +135,13 @@ class ValveSoftwareWiredController(USBHidDevice):
                 if not log.isEnabledFor(logging.DEBUG):
                     print(".", end="",flush=True)
                 length = len(chunk)
-                # TODO find out what the random number is. A checksum?
-                random_number = 0
-                if length < chunk_size:
-                    log.debug("Last chunk")
-                    if filename.endswith("d0g_bootloader.bin"):
-                        random_number = 0x360
-                    elif filename.endswith("d0g_module.bin"):
-                        random_number = 0xce4
-                    elif filename.endswith("s110_nrf51_8.0.0_softdevice.bin"):
-                        random_number = 0x67f0
-                    elif filename.endswith("vcf_wired_controller_d0g_5a0e3f348_radio.bin"):
-                        random_number = 0x6a44
-                address = struct.unpack("BBBB",((idx * length)+start_address+random_number).to_bytes(4, 'little'))
+                address = struct.unpack("BBBB",((idx * chunk_size)+start_address).to_bytes(4, 'little'))
                 # 4 bytes of address location 38*n
                 payload = [SCProtocolId.FlashSWD, length+4]
                 payload.extend(address)
                 payload.extend(chunk)
                 self.send(payload)
                 # Wait for "ready": 0x60,0x09, while "not ready":0x00, 0x02
-                while(self.expect(self.get(), [0x94, 0x06, 0x00, 0x00, 0x60, 0x09], [0x94, 0x06, 0x00, 0x00, 0x00, 0x00, 0x02])):
+                while(self.expect(self.get([0x94, 0x06, 0x00, 0x00, 0x60, 0x09]), [0x94, 0x06, 0x00, 0x00, 0x60, 0x09], [0x94, 0x06, 0x00, 0x00, 0x00, 0x00, 0x02])):
                     time.sleep(0.01)
             print("")

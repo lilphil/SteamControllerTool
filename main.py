@@ -25,4 +25,3 @@ if __name__ == '__main__':
     sc.FlashLPCFirmware("./fw_images/ble/vcf_wired_controller_d0g_5b0f21bd.bin")
     time.sleep(4)
     sc.FlashRadioFirmware("./fw_images/ble/s110_nrf51_8.0.0_softdevice.bin", "./fw_images/ble/vcf_wired_controller_d0g_5a0e3f348_radio.bin", 0)
-

@@ -1,10 +1,6 @@
 import time
-import binascii
-import pprint
 import struct
-import numpy as np
 import logging
-from ctypes import c_uint8, c_uint16, c_uint32
 
 from ValveSoftwareWiredController import ValveSoftwareWiredController
 from ValveSoftwareWiredControllerBootloader import ValveSoftwareWiredControllerBootloader
@@ -84,6 +80,7 @@ class SteamController:
         self.bootloader = ValveSoftwareWiredControllerBootloader();
 
     def ChecksumFirmwareFile(self, filename, seek):
+        # crc128
         low32 = ( 1 << 32 ) - 1
         with open(filename, 'rb') as f:
             f.seek(seek)
@@ -99,3 +96,4 @@ class SteamController:
             checksum_bytes = struct.pack("<IIII", checksum[0], checksum[1], checksum[2], checksum[3])
             log.debug("Checksum: %s", checksum_bytes.hex())
             return struct.unpack("<BBBBBBBBBBBBBBBB", checksum_bytes)
+
