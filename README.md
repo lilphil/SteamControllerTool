@@ -38,9 +38,9 @@ Flash LPC11U37F firmware
 
 Flash nRF51822 firmware
 
-## qf
+### qf
 
-"Quick flash" will use the hardcoded filenames from firmware as per the setup step if you have them.
+"Quick flash" will use the hardcoded filenames from firmware as per the setup step if you have them.  
 Usage, `qf -b` or `qf -p` for ble or production
 
 ## Steam Controller
@@ -51,18 +51,18 @@ You can recover from most issues by entering bootloader mode on the controller, 
 
 ## BLE Firmware
 
-Y + Steam = Bluetooth LE Pairing Mode
-B + Steam = Switch to Bluetooth LE Mode
-X + Steam = Receiver Pairing Mode
-A + Staem = Switch to dongle Mode
+Y + Steam = Bluetooth LE Pairing Mode  
+B + Steam = Switch to Bluetooth LE Mode  
+X + Steam = Receiver Pairing Mode  
+A + Staem = Switch to dongle Mode  
 
 https://help.steampowered.com/en/faqs/view/1796-5FC3-88B3-C85F
 
 ## Troubleshooting
 
-If you keep getting errors trying to open steam controller, make sure the hid library is > 1.0 (ubuntu 24.04 python3-hid is too old at v0.9).
-Check lsusb to make sure the controller is showing up, if it isnt check cables.
-Make sure you have udev permissions.
+ * If you keep getting errors trying to open steam controller, make sure the hid library is > 1.0 (ubuntu 24.04 python3-hid is too old at v0.9).
+ * Check lsusb to make sure the controller is showing up, if it isnt check cables.
+ * Make sure you have udev permissions.
 
 ---
 
