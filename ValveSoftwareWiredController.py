@@ -116,7 +116,24 @@ class ValveSoftwareWiredController(USBHidDevice):
 
     def SWDStart(self):
         self.send([SCProtocolId.SendIRCode,0x04, 0x17, 0xed, 0xfe, 0xd0])
-        while (self.expect(self.get([0x94, 0x06, 0x00, 0x00, 0xfc, 0x03]), [0x94, 0x06, 0x00, 0x00, 0xfc, 0x03], [0x94, 0x06, 0x00, 0x00, 0x00, 0x00, 0x02], [0x94, 0x06, 0x00, 0x00, 0x00, 0x00, 0x01])):
+        deadline = time.time() + 30
+        while True:
+            response = self.get([0x94, 0x06, 0x00, 0x00, 0xfc, 0x03])
+            try:
+                idx = self.expect(
+                    response,
+                    [0x94, 0x06, 0x00, 0x00, 0xfc, 0x03],
+                    [0x94, 0x06, 0x00, 0x00, 0x00, 0x00, 0x02],
+                    [0x94, 0x06, 0x00, 0x00, 0x00, 0x00, 0x01],
+                )
+            except Exception:
+                log.error("SWDStart unexpected response: %s", response[:16].hex() if response else "<empty>")
+                raise
+            if idx == 0:
+                return
+            if time.time() > deadline:
+                raise Exception("SWDStart timed out still busy; last=%s" % (response[:16].hex() if response else "<empty>"))
+            log.info("SWDStart waiting (status=%s)", response[:8].hex())
             time.sleep(0.1)
 
     def SWDErase(self):

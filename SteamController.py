@@ -71,22 +71,51 @@ class SteamController:
         c.SWDFlash(application,application_address)
         c.SWDSave()
         log.info("Resetting")
-        c.ResetSOC() 
+        c.ResetSOC()
+        # ResetSOC drops USB; reopen app HID so a following LPC flash can
+        # RebootToBootloader on a live handle (qf -p radio-then-LPC).
+        self._reopen_app(settle=4)
 
     def FirmwareMode(self):
         self.initial_bootloader_mode = False # If we call this directly, then we assume we have returned to normal
         self.bootloader.RebootToFirmware()
         del self.bootloader
         self.bootloader = None
-        time.sleep(2)
-        self.sc = ValveSoftwareWiredController();
+        # App needs time after reset before SWD bitbang is ready (BLE host).
+        self._reopen_app(settle=4)
 
     def BootloaderMode(self):
+        if self.sc is None:
+            self._reopen_app(settle=2)
         self.sc.RebootToBootloader()
+        try:
+            self.sc.close()
+        except Exception:
+            pass
         del self.sc
         self.sc = None
         time.sleep(2)
         self.bootloader = ValveSoftwareWiredControllerBootloader();
+
+    def _reopen_app(self, settle=4):
+        if self.sc is not None:
+            try:
+                self.sc.close()
+            except Exception:
+                pass
+            del self.sc
+            self.sc = None
+        time.sleep(settle)
+        deadline = time.time() + 15
+        last_err = None
+        while time.time() < deadline:
+            try:
+                self.sc = ValveSoftwareWiredController()
+                return
+            except Exception as e:
+                last_err = e
+                time.sleep(0.5)
+        raise Exception("Could not reopen controller after reset: %s" % last_err)
 
     def ChecksumFirmwareFile(self, filename, seek):
         # crc128
