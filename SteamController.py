@@ -81,8 +81,12 @@ class SteamController:
         self.bootloader.RebootToFirmware()
         del self.bootloader
         self.bootloader = None
-        # App needs time after reset before SWD bitbang is ready (BLE host).
-        self._reopen_app(settle=4)
+        # App needs time after reset before HID is ready. Do not fail the whole
+        # flash if reopen times out — verify already succeeded.
+        try:
+            self._reopen_app(settle=4)
+        except Exception as e:
+            log.warn("Could not reopen app HID after reset (flash may still be OK): %s", e)
 
     def BootloaderMode(self):
         if self.sc is None:
@@ -95,8 +99,16 @@ class SteamController:
         del self.sc
         self.sc = None
         time.sleep(2)
-        self.bootloader = ValveSoftwareWiredControllerBootloader();
-
+        deadline = time.time() + 15
+        last_err = None
+        while time.time() < deadline:
+            try:
+                self.bootloader = ValveSoftwareWiredControllerBootloader()
+                return
+            except Exception as e:
+                last_err = e
+                time.sleep(0.5)
+        raise Exception("Could not open bootloader after reboot: %s" % last_err)
     def _reopen_app(self, settle=4):
         if self.sc is not None:
             try:
@@ -125,6 +137,8 @@ class SteamController:
             checksum = [0,0,0,0]
             chunks = iter(lambda: f.read(0x10), b'')
             for chunk in chunks:
+                if len(chunk) < 0x10:
+                    chunk = chunk + b'\x00' * (0x10 - len(chunk))
                 cur_word = struct.unpack("<IIII", chunk)
                 save = checksum[1] << 0x1f;
                 checksum[1] = (checksum[2] << 0x1f ^ checksum[1] >> 1 ^ cur_word[1]) & low32
