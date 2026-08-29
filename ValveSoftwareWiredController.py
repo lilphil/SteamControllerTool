@@ -115,8 +115,12 @@ class ValveSoftwareWiredController(USBHidDevice):
     # These methods only work on BLE host firmware
 
     def SWDStart(self):
+        # Response payload after 0x94/len:
+        #   fc 03 .... = ready (IDCODE-ish); 00 00 00 00 02 = busy; 00 00 00 00 01 = stuck/fail
+        # Status 01 does not clear by polling — needs a warm reset (or another LPC flash).
         self.send([SCProtocolId.SendIRCode,0x04, 0x17, 0xed, 0xfe, 0xd0])
         deadline = time.time() + 30
+        status01_streak = 0
         while True:
             response = self.get([0x94, 0x06, 0x00, 0x00, 0xfc, 0x03])
             try:
@@ -131,6 +135,13 @@ class ValveSoftwareWiredController(USBHidDevice):
                 raise
             if idx == 0:
                 return
+            if idx == 2:
+                status01_streak += 1
+                # ~2s of 01 with no progress → fail fast so caller can reset/retry
+                if status01_streak >= 20:
+                    raise Exception("SWDStart stuck at status 01; last=%s" % response[:8].hex())
+            else:
+                status01_streak = 0
             if time.time() > deadline:
                 raise Exception("SWDStart timed out still busy; last=%s" % (response[:16].hex() if response else "<empty>"))
             log.info("SWDStart waiting (status=%s)", response[:8].hex())

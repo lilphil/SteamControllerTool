@@ -50,19 +50,46 @@ class SteamController:
     def FlashLPCFirmware(self, filename):
         log.info("Reboot to bootloader")
         b = self.Bootloader()
-        log.info("Erase LPC firmware")
-        b.EraseFirmware()
-        log.info("Flashing %s", filename)
-        b.FlashFirmware(filename)
-        checksum = self.ChecksumFirmwareFile(filename, 0x2030)
-        b.VerifyFirmware(checksum)
+        last_err = None
+        for attempt in range(2):
+            try:
+                log.info("Erase LPC firmware")
+                b.EraseFirmware()
+                log.info("Flashing %s", filename)
+                b.FlashFirmware(filename)
+                checksum = self.ChecksumFirmwareFile(filename, 0x2030)
+                b.VerifyFirmware(checksum)
+                last_err = None
+                break
+            except Exception as e:
+                last_err = e
+                log.warn("Flash/verify attempt %d failed: %s", attempt + 1, e)
+                time.sleep(1)
+        if last_err is not None:
+            raise last_err
         log.info("Resetting")
         self.FirmwareMode()
+        # First app boot after programming often leaves SWD stuck at status 01
+        # until another reset; a warm reboot matches "flash LPC twice" without
+        # rewriting flash, so a following radio/SWD flash can succeed.
+        self._warm_reset_app()
 
     def FlashRadioFirmware(self, soft_device, application, application_address = 0):
         c = self.Ctrl()
-        log.info("Starting SWD")
-        c.SWDStart()
+        last_err = None
+        for attempt in range(3):
+            try:
+                log.info("Starting SWD")
+                c.SWDStart()
+                last_err = None
+                break
+            except Exception as e:
+                last_err = e
+                log.warn("SWDStart attempt %d failed: %s", attempt + 1, e)
+                self._warm_reset_app()
+                c = self.Ctrl()
+        if last_err is not None:
+            raise last_err
         log.info("Erase SWD")
         c.SWDErase()
         log.info("Flashing %s", soft_device)
@@ -91,7 +118,12 @@ class SteamController:
     def BootloaderMode(self):
         if self.sc is None:
             self._reopen_app(settle=2)
-        self.sc.RebootToBootloader()
+        # Firmware may reset before SET_FEATURE status completes; hidapi then
+        # raises (e.g. EPROTO) even though the device entered bootloader mode.
+        try:
+            self.sc.RebootToBootloader()
+        except Exception as e:
+            log.warn("RebootToBootloader SET_FEATURE failed (waiting for bootloader anyway): %s", e)
         try:
             self.sc.close()
         except Exception:
@@ -104,11 +136,15 @@ class SteamController:
         while time.time() < deadline:
             try:
                 self.bootloader = ValveSoftwareWiredControllerBootloader()
+                # Programming-mode USB is often not ready for erase/flash on the
+                # first open after re-enumeration (verify fails without this).
+                time.sleep(1)
                 return
             except Exception as e:
                 last_err = e
                 time.sleep(0.5)
         raise Exception("Could not open bootloader after reboot: %s" % last_err)
+
     def _reopen_app(self, settle=4):
         if self.sc is not None:
             try:
@@ -128,6 +164,16 @@ class SteamController:
                 last_err = e
                 time.sleep(0.5)
         raise Exception("Could not reopen controller after reset: %s" % last_err)
+
+    def _warm_reset_app(self, settle=4):
+        """ResetSOC from app firmware and reopen HID (drops USB briefly)."""
+        if self.sc is None:
+            self._reopen_app(settle=2)
+        try:
+            self.sc.ResetSOC()
+        except Exception as e:
+            log.warn("ResetSOC failed (waiting for re-enumerate anyway): %s", e)
+        self._reopen_app(settle=settle)
 
     def ChecksumFirmwareFile(self, filename, seek):
         # crc128
